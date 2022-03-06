@@ -68,6 +68,7 @@ void setup() {
   //Aux 2 Pin Setup
   pinMode(B_PIN, INPUT);
   pinMode(C_PIN, INPUT);
+  pinMode(G_PIN, INPUT_PULLUP);
 
   /** Re-Enable to aactivate cooling fan.
   pinMode(Main_Fan_Pin, OUTPUT);
@@ -90,6 +91,9 @@ void setup() {
    // enable timer compare interrupt
    TIMSK4 |= (1 << OCIE4A);
   sei();//allow interrupts
+
+
+  digitalWrite(LED_BUILTIN, LOW);
 
 }
 
@@ -115,18 +119,25 @@ void Stepers_Off(){
 }
 
 
-boolean MoveAxis_OLD(boolean S_Direct){
-    digitalWrite(Z_DIR_PIN, S_Direct); // set direction, HIGH for clockwise, LOW for anticlockwise
-    digitalWrite(Z_ENABLE_PIN,LOW); //enables stepper if its not already enabled
-    digitalWrite(Z_STEP_PIN,HIGH);
-    delayMicroseconds(X_Speed);
-    digitalWrite(Z_STEP_PIN,LOW);
-    delayMicroseconds(X_Speed); //max 300
-    return true;
+
+
+bool MoveAxis(boolean S_Direct, int S_Speed, byte S_STEP_PIN, byte S_DIR_PIN, byte S_ENABLE_PIN, byte S_LIMIT_PIN){
+  if (digitalRead(S_LIMIT_PIN) == 0){ //stops the code if the crane is trying to head the direction of an active limit switch
+    return false;
+  }
+  digitalWrite(S_DIR_PIN, S_Direct); // set direction, HIGH for clockwise, LOW for anticlockwise
+  digitalWrite(S_ENABLE_PIN,LOW); //enables stepper if its not already enabled
+  digitalWrite(S_STEP_PIN,HIGH);
+  delayMicroseconds(S_Speed);
+  digitalWrite(S_STEP_PIN,LOW);
+  delayMicroseconds(S_Speed); //max 300
+  return true;
 }
 
 
-boolean MoveAxis(char S_Motor, boolean S_Direct, int S_Speed){
+
+
+void Move_Crane(char S_Motor, boolean S_Direct, int S_Speed, char S_Mode, byte S_Trigger = 0){
   byte S_STEP_PIN;
   byte S_DIR_PIN;
   byte S_ENABLE_PIN;
@@ -175,41 +186,41 @@ boolean MoveAxis(char S_Motor, boolean S_Direct, int S_Speed){
     }
 
 
-    if (digitalRead(S_LIMIT_PIN) == 0){
-      return false;
-    }
-    digitalWrite(S_DIR_PIN, S_Direct); // set direction, HIGH for clockwise, LOW for anticlockwise
-    digitalWrite(S_ENABLE_PIN,LOW); //enables stepper if its not already enabled
-    digitalWrite(S_STEP_PIN,HIGH);
-    delayMicroseconds(S_Speed);
-    digitalWrite(S_STEP_PIN,LOW);
-    delayMicroseconds(S_Speed); //max 300
-    return true;
-}
 
-
-
-
-void Manouver(char S_Motor, boolean S_Direct, int S_Speed, byte S_Trigger){
-  while ((digitalRead(S_Trigger) == 1) && (G_Time_Out == false)){
-    if (MoveAxis(S_Motor, S_Direct, S_Speed) == false){
-      return;
-    }
+    switch (S_Mode) {
+      case 'M':
+        while ((digitalRead(S_Trigger) == 1) && (G_Time_Out == false)){
+          if (MoveAxis(S_Direct, S_Speed, S_STEP_PIN, S_DIR_PIN, S_ENABLE_PIN, S_LIMIT_PIN) == false){
+            return;
+          }
+        }
+        break;
+      case 'H':
+        while (digitalRead(Y_MIN_PIN) == 1) {
+          if (MoveAxis(S_Direct, S_Speed, S_STEP_PIN, S_DIR_PIN, S_ENABLE_PIN, S_LIMIT_PIN) == false){
+            return;
+          }
+        }
+        break;
   }
 }
 
 
-void Home(char S_Motor, boolean S_Direct, int S_Speed, byte S_Trigger){
-  while (digitalRead(Y_MIN_PIN) == 1) {
-    if (MoveAxis(S_Motor, S_Direct, S_Speed) == false){
-      return;
-    }
-  }
-}
+
+
+
+
 
 void loop() {
 
 
+  // Wait for B_Pin to be pressed
+  while (digitalRead(G_PIN) == 1){
+    G_Start_Time = 10;
+  }
+
+  digitalWrite(LED_BUILTIN, HIGH);
+  G_Timing = true;//start timer
 
   // Wait for B_Pin to be pressed
   while (digitalRead(B_PIN) == 0){
@@ -218,9 +229,7 @@ void loop() {
 
   //Trigger timer and move untill B_Pin rerleased
   if (digitalRead(B_PIN) == 1){
-    G_Start_Time = 10;
-    G_Timing = true;
-    Manouver('X', 1, X_Speed, B_PIN);
+    Move_Crane('X', 1, X_Speed,'M',B_PIN);
   }
 
   while ((digitalRead(C_PIN) == 0) && (G_Time_Out == false)){
@@ -228,19 +237,20 @@ void loop() {
   }
 
   if (digitalRead(C_PIN) == 1){
-    Manouver('Z', 1, Default_Speed, C_PIN);
+    Move_Crane('Z', 1, Default_Speed, 'M', C_PIN);
   }
 
   //END OF USE CONTROLLED SECTION
 
-  G_Timing = false; //Stops the timer as use has finished input
+  G_Timing = false; //Stops the timer as user has finished input
 
 
   delay(600);
-  Home('X', 0, X_Speed, B_PIN); //Home Y
+  Move_Crane('X', 0, X_Speed, 'H'); //Home Y
   delay(500);
-  Home('Z', 0, X_Speed, B_PIN); //Home Z
+  Move_Crane('Z', 0, X_Speed, 'H'); //Home Z
 
+  digitalWrite(LED_BUILTIN, LOW);
   Stepers_Off();
 
 

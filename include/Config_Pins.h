@@ -46,7 +46,7 @@ GND   PIN A   PIN B   PIN C   Pin D
  */
 #define B_PIN                               40
 #define C_PIN                               42
-
+#define G_PIN                               44
 
 
 
