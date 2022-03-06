@@ -71,8 +71,8 @@ void setup() {
 
   /** Re-Enable to aactivate cooling fan.
   pinMode(Main_Fan_Pin, OUTPUT);
-  digitalWrite(Main_Fan_Pin,LOW);
-    */
+  digitalWrite(Main_Fan_Pin,HIGH);
+  */
 
 
   //TIMER INTERUPTS
@@ -108,6 +108,11 @@ ISR(TIMER4_COMPA_vect){//timer1 interrupt 1Hz toggles pin 13 (LED)
   }
 } //ISR TIMER END
 
+void Stepers_Off(){
+  digitalWrite(X_ENABLE_PIN,HIGH);
+  digitalWrite(Y_ENABLE_PIN,HIGH);
+  digitalWrite(Z_ENABLE_PIN,HIGH);
+}
 
 
 boolean MoveAxis_OLD(boolean S_Direct){
@@ -132,39 +137,39 @@ boolean MoveAxis(char S_Motor, boolean S_Direct, int S_Speed){
         S_STEP_PIN = X_STEP_PIN;
         S_DIR_PIN = X_DIR_PIN;
         S_ENABLE_PIN = X_ENABLE_PIN;
-        if(X_Direction == 1){ //corrects stepper direction when required
-            S_Direct = !S_Direct;
-        }
         if(S_Direct == 0){ //this block sets the limit switch to kill the command
           S_LIMIT_PIN = X_MIN_PIN ;
         } else {
           S_LIMIT_PIN = X_MAX_PIN ;
+        }
+        if(X_Direction == 1){ //corrects stepper direction when required
+            S_Direct = !S_Direct;
         }
       break;
     case 'Y': //Set up to move motor Y
         S_STEP_PIN = Y_STEP_PIN;
         S_DIR_PIN = Y_DIR_PIN;
         S_ENABLE_PIN = Y_ENABLE_PIN;
-        if(Y_Direction == 1){//corrects stepper direction when required
-            S_Direct = !S_Direct;
-        }
         if(S_Direct == 0){ //this block sets the limit switch to kill the command
           S_LIMIT_PIN = Y_MIN_PIN ;
         } else {
           S_LIMIT_PIN = Y_MAX_PIN ;
+        }
+        if(Y_Direction == 1){//corrects stepper direction when required
+            S_Direct = !S_Direct;
         }
       break;
     case 'Z': //Set up to move motor Y
           S_STEP_PIN = Z_STEP_PIN;
           S_DIR_PIN = Z_DIR_PIN;
           S_ENABLE_PIN = Z_ENABLE_PIN;
-          if(Z_Direction == 1){//corrects stepper direction when required
-              S_Direct = !S_Direct;
-          }
           if(S_Direct == 0){ //this block sets the limit switch to kill the command
             S_LIMIT_PIN = Z_MIN_PIN ;
           } else {
             S_LIMIT_PIN = Z_MAX_PIN ;
+          }
+          if(Z_Direction == 1){//corrects stepper direction when required
+              S_Direct = !S_Direct;
           }
         break;
     }
@@ -186,7 +191,7 @@ boolean MoveAxis(char S_Motor, boolean S_Direct, int S_Speed){
 
 
 void Manouver(char S_Motor, boolean S_Direct, int S_Speed, byte S_Trigger){
-  while ((digitalRead(Y_MIN_PIN) == 1) && (digitalRead(S_Trigger) == 1)){
+  while ((digitalRead(S_Trigger) == 1) && (G_Time_Out == false)){
     if (MoveAxis(S_Motor, S_Direct, S_Speed) == false){
       return;
     }
@@ -195,8 +200,10 @@ void Manouver(char S_Motor, boolean S_Direct, int S_Speed, byte S_Trigger){
 
 
 void Home(char S_Motor, boolean S_Direct, int S_Speed, byte S_Trigger){
-  while (digitalRead(Y_MIN_PIN) == 1){
-    MoveAxis(S_Motor, S_Direct, S_Speed);
+  while (digitalRead(Y_MIN_PIN) == 1) {
+    if (MoveAxis(S_Motor, S_Direct, S_Speed) == false){
+      return;
+    }
   }
 }
 
@@ -213,10 +220,10 @@ void loop() {
   if (digitalRead(B_PIN) == 1){
     G_Start_Time = 10;
     G_Timing = true;
-    Manouver('Y', 1, X_Speed, B_PIN);
+    Manouver('X', 1, X_Speed, B_PIN);
   }
 
-  while (digitalRead(C_PIN) == 0){
+  while ((digitalRead(C_PIN) == 0) && (G_Time_Out == false)){
     delay(20);
   }
 
@@ -224,12 +231,18 @@ void loop() {
     Manouver('Z', 1, Default_Speed, C_PIN);
   }
 
+  //END OF USE CONTROLLED SECTION
+
+  G_Timing = false; //Stops the timer as use has finished input
+
+
   delay(600);
-  Home('Y', 0, X_Speed, B_PIN); //Home Y
+  Home('X', 0, X_Speed, B_PIN); //Home Y
   delay(500);
   Home('Z', 0, X_Speed, B_PIN); //Home Z
 
-  G_Timing = false;
+  Stepers_Off();
+
 
 // Serial.print(digitalRead(Y_MIN_PIN));
 // Serial.print(digitalRead(Y_MAX_PIN));
