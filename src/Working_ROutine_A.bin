@@ -1,0 +1,208 @@
+#include <Arduino.h>
+#include "Config_A.h"
+#include <SPI.h>
+// Stepper motor run code with a4988 driver
+// by Superb
+
+
+//
+
+/**
+AUX-2 Pins
+GND   PIN A   PIN B   PIN C   Pin D
+12v   PIN E   PIN F   PIN G   Pin H
+ */
+#define B_PIN                               40
+#define C_PIN                               42
+
+//Movement Speeds
+#define X_Speed                             500
+
+byte G_Phase = 0;
+bool G_Trip = false;
+bool G_Timing = false;
+long G_Start_Time = 0;
+long G_Last_Time = 0;
+long G_Left_Time = 0;
+byte G_Game_Time = 10;
+
+long Z_Height = 200;
+long G_Z_Count = 0;
+
+bool dirX = false;
+int lastButtonState = LOW;
+
+
+
+// the following variables are unsigned longs because the time, measured in
+// milliseconds, will quickly become a bigger number than can be stored in an int.
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 600;    // the debounce time; increase if the output flickers
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(X_STEP_PIN,OUTPUT);
+  pinMode(X_DIR_PIN,OUTPUT);
+  digitalWrite(X_ENABLE_PIN,HIGH);
+  pinMode(X_ENABLE_PIN ,OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(B_PIN, INPUT);
+  pinMode(C_PIN, INPUT);
+}
+
+boolean MoveAxis_Back_and_forth(){
+  digitalWrite(X_DIR_PIN, HIGH); // set direction, HIGH for clockwise, LOW for anticlockwise
+
+
+    digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+    digitalWrite(X_ENABLE_PIN,LOW);
+     for(int x = 0; x<200; x++) { // loop for 200 steps
+      digitalWrite(X_STEP_PIN,HIGH);
+      delayMicroseconds(X_Speed);
+      digitalWrite(X_STEP_PIN,LOW);
+      delayMicroseconds(X_Speed); //max 300
+     }
+     delay(500);
+     digitalWrite(X_DIR_PIN, LOW);
+     for(int x = 0; x<200; x++) { // loop for 200 steps
+      digitalWrite(X_STEP_PIN,HIGH);
+      delayMicroseconds(X_Speed);
+      digitalWrite(X_STEP_PIN,LOW);
+      delayMicroseconds(X_Speed); //max 300
+     }
+
+
+    digitalWrite(X_ENABLE_PIN,HIGH);
+    digitalWrite(LED_BUILTIN, LOW);   // turn the LED on (HIGH is the voltage level)
+
+  return false;
+}
+
+
+boolean MoveAxis(boolean S_Direct){
+    digitalWrite(X_DIR_PIN, S_Direct); // set direction, HIGH for clockwise, LOW for anticlockwise
+    digitalWrite(X_ENABLE_PIN,LOW); //enables stepper if its not already enabled
+
+    digitalWrite(X_STEP_PIN,HIGH);
+    delayMicroseconds(X_Speed);
+    digitalWrite(X_STEP_PIN,LOW);
+    delayMicroseconds(X_Speed); //max 300
+
+    return true;
+}
+
+
+
+void loop() {
+
+  //This block records the time and creates a countdown
+  //Countdown is displayed on the LCD
+  //When it reaches 0 then G_Phase is set to the relevant phase
+  if (G_Timing == true){ //if timer has been told to be active
+    if ((G_Last_Time + 1000) < millis()){ //if a second has passed since last reporting time then carry on
+      G_Left_Time = G_Game_Time - ((millis() - G_Start_Time)/1000);
+      G_Last_Time = millis();
+      Serial.println(G_Left_Time); //Prints time left
+    }
+    if (G_Left_Time == 0){ //if time runs out
+      G_Phase = 3; //moves to the phase after user controls (Drop claw)
+      G_Timing = false; //Deactivate timer
+      Serial.println("TIME OUT!"); //prints message to warn user they run out of time
+      delay(1000); //give time to read message
+      Serial.println(); //prints message to warn user they run out of time
+      delay(500); //give time to read message
+      Serial.println("TIME OUT!"); //prints message to warn user they run out of time
+      delay(1000); //give time to read message
+      Serial.println(); //prints message to warn user they run out of time
+      delay(500); //give time to read message
+      Serial.println("TIME OUT!"); //prints message to warn user they run out of time
+      delay(300); //give time to read message
+    }
+  }
+
+
+  //swich is used to determine which phase the machine is in.
+  switch (G_Phase) {
+
+    case 0: //Wait for button to be pressed to start the game
+    digitalWrite(LED_BUILTIN, HIGH);
+    if (digitalRead(B_PIN) == 1){
+      G_Trip = true;
+    } else {
+      if (G_Trip == true){
+        G_Phase += 1;
+        G_Trip = false;
+        digitalWrite(LED_BUILTIN, LOW);
+        G_Timing = true;
+        G_Start_Time = millis();
+      }
+    }
+      break;
+
+    case 1: //Move Y Axis
+      if (digitalRead(B_PIN) == 1){
+        MoveAxis(1);
+        G_Trip = true;
+      } else {
+        if (G_Trip == true){
+          //digitalWrite(X_ENABLE_PIN,HIGH);
+          G_Phase += 1;
+          G_Trip = false;
+        }
+      }
+      break;
+
+    case 2: //Move X Axis
+      if (digitalRead(C_PIN) == 1){
+        MoveAxis(0);
+        G_Trip = true;
+      } else {
+        if (G_Trip == true){
+          //digitalWrite(X_ENABLE_PIN,HIGH);
+          G_Phase += 1;
+          G_Trip = false;
+          G_Timing = false;
+          delay(300);
+        }
+      }
+      break;
+
+      case 3: //Return X until limit switch
+        if (digitalRead(C_PIN) == 0){
+          MoveAxis(0);
+          G_Trip = true;
+        } else {
+          if (G_Trip == true){
+            digitalWrite(X_ENABLE_PIN,HIGH);
+            G_Phase += 1;
+            G_Trip = false;
+            dirX = 0;
+            G_Timing = false;
+            delay(300);
+          }
+        }
+        break;
+
+      case 4: //Lower Claw
+        if (G_Z_Count >= Z_Height && G_Trip == true){
+          G_Phase = 0;
+          G_Trip = false;
+          G_Z_Count = 0;
+          digitalWrite(X_ENABLE_PIN,HIGH);
+        } else if (G_Z_Count >= Z_Height){
+          G_Z_Count = 0;
+          dirX = !dirX;
+          G_Trip = true;
+        } else {
+          MoveAxis(dirX);
+          G_Z_Count += 1;
+        }
+        break;
+
+
+    }//END OF CASE/SWITCH
+
+
+
+
+}

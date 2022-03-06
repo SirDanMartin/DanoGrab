@@ -1,0 +1,91 @@
+#include <Arduino.h>
+#include "Config_A.h"
+// Stepper motor run code with a4988 driver
+// by Superb
+
+
+//AUX-2 Pins
+#define B_PIN                               40
+#define C_PIN                               42
+
+//Movement Speeds
+#define X_Speed                             1300
+
+
+bool dirX = false;
+int lastButtonState = LOW;
+
+// the following variables are unsigned longs because the time, measured in
+// milliseconds, will quickly become a bigger number than can be stored in an int.
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 600;    // the debounce time; increase if the output flickers
+
+void setup() {
+  pinMode(X_STEP_PIN,OUTPUT);
+  pinMode(X_DIR_PIN,OUTPUT);
+  pinMode(X_ENABLE_PIN ,OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(B_PIN, INPUT);
+}
+
+boolean MoveAxis_Back_and_forth(){
+  digitalWrite(X_DIR_PIN, HIGH); // set direction, HIGH for clockwise, LOW for anticlockwise
+
+
+    digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+    digitalWrite(X_ENABLE_PIN,LOW);
+     for(int x = 0; x<200; x++) { // loop for 200 steps
+      digitalWrite(X_STEP_PIN,HIGH);
+      delayMicroseconds(X_Speed);
+      digitalWrite(X_STEP_PIN,LOW);
+      delayMicroseconds(X_Speed); //max 300
+     }
+     delay(500);
+     digitalWrite(X_DIR_PIN, LOW);
+     for(int x = 0; x<200; x++) { // loop for 200 steps
+      digitalWrite(X_STEP_PIN,HIGH);
+      delayMicroseconds(X_Speed);
+      digitalWrite(X_STEP_PIN,LOW);
+      delayMicroseconds(X_Speed); //max 300
+     }
+
+
+    digitalWrite(X_ENABLE_PIN,HIGH);
+    digitalWrite(LED_BUILTIN, LOW);   // turn the LED on (HIGH is the voltage level)
+
+  return false;
+}
+
+
+boolean MoveAxis(){
+    digitalWrite(X_DIR_PIN, dirX); // set direction, HIGH for clockwise, LOW for anticlockwise
+    digitalWrite(X_ENABLE_PIN,LOW);
+
+    digitalWrite(X_STEP_PIN,HIGH);
+    delayMicroseconds(X_Speed);
+    digitalWrite(X_STEP_PIN,LOW);
+    delayMicroseconds(X_Speed); //max 300
+
+    return true;
+}
+
+
+void loop() {
+
+  //Button to move stepper all the time the button is held
+  if (digitalRead(B_PIN) == 1){
+    MoveAxis();
+  } else {
+    digitalWrite(X_ENABLE_PIN,HIGH);
+  }
+
+
+
+  //reverse direction
+  if (digitalRead(C_PIN) == 1){
+    if (millis() > lastDebounceTime + debounceDelay){
+      dirX = !dirX;
+      lastDebounceTime = millis();
+    }
+  }
+}
