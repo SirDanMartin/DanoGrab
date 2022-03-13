@@ -2,7 +2,7 @@
 #include "Config_Pins.h"
 #include "Config_Setup.h"
 #include <SPI.h>
-
+#include <LiquidCrystal.h>
 
 
 
@@ -21,20 +21,22 @@ bool G_Trip = false;
 //Timer variables
 bool G_Timing = false;
 byte G_Time_Out = false;
+int G_Remaining_Time;
 
-
-
-long Z_Height = 200;
-long G_Z_Count = 0;
-
-bool dirX = false;
-int lastButtonState = LOW;
-
-
+//Set up for current screen
+LiquidCrystal lcd(27, 25, 16, 35, 23 , 17);
 
 
 void setup() {
-  Serial.begin(9600);
+  //Serial.begin(9600);
+
+  //Sets up LCD
+  analogWrite(A12, 255);
+  lcd.begin(16, 2);
+  lcd.setCursor(0,0);
+  lcd.print("CraneGame");
+  lcd.setCursor(0,1);
+  lcd.print("Press Start");
 
   //Stepper X Pin Setup
   digitalWrite(X_ENABLE_PIN,HIGH);
@@ -61,13 +63,12 @@ void setup() {
   pinMode(Z_MAX_PIN, INPUT_PULLUP);
 
 
-
   //Built in LED
   pinMode(LED_BUILTIN, OUTPUT);
 
   //Aux 2 Pin Setup
-  pinMode(B_PIN, INPUT);
-  pinMode(C_PIN, INPUT);
+  pinMode(B_PIN, INPUT_PULLUP);
+  pinMode(C_PIN, INPUT_PULLUP);
   pinMode(G_PIN, INPUT_PULLUP);
 
   /** Re-Enable to aactivate cooling fan.
@@ -101,13 +102,20 @@ ISR(TIMER4_COMPA_vect){//timer1 interrupt 1Hz toggles pin 13 (LED)
 //generates pulse wave of frequency 1Hz/2 = 0.5kHz (takes two cycles for full wave- toggle high then toggle low)
   //Serial.println(millis()/1000); //Prints time left
   if (G_Timing == true){ //if timer is active
-    if (G_Start_Time < 0){ //if timer reached 0 then end timer and flag it
+    if (G_Remaining_Time < 0){ //if timer reached 0 then end timer and flag it
       G_Timing = false;
-      Serial.println("TIME OUT");
+      lcd.setCursor(13,0);
+      lcd.print("  ");
+      lcd.setCursor(0,1);
+      lcd.print("TIME OUT                ");
       G_Time_Out = true;
     } else { // if not at 0, count down and update LCD time
-      Serial.println(G_Start_Time);
-      G_Start_Time -= 1;
+      //Serial.println(G_Remaining_Time);
+      lcd.setCursor(13,0);
+      lcd.print("  ");
+      lcd.setCursor(13,0);
+      lcd.print(G_Remaining_Time);
+      G_Remaining_Time -= 1;
     }
   }
 } //ISR TIMER END
@@ -121,90 +129,138 @@ void Stepers_Off(){
 
 
 
-bool MoveAxis(boolean S_Direct, int S_Speed, byte S_STEP_PIN, byte S_DIR_PIN, byte S_ENABLE_PIN, byte S_LIMIT_PIN){
-  if (digitalRead(S_LIMIT_PIN) == 0){ //stops the code if the crane is trying to head the direction of an active limit switch
-    return false;
-  }
-  digitalWrite(S_DIR_PIN, S_Direct); // set direction, HIGH for clockwise, LOW for anticlockwise
-  digitalWrite(S_ENABLE_PIN,LOW); //enables stepper if its not already enabled
-  digitalWrite(S_STEP_PIN,HIGH);
+
+
+
+bool Step_XY(bool X_on, bool X_dir, bool Y_on, bool Y_dir, int S_Speed){
+	int X_Stop;
+	int Y_Stop;
+
+	digitalWrite(X_DIR_PIN, X_dir); // set direction, LOW/0/false = Towards Home, HIGH/1/true = Away from home.
+	digitalWrite(X_ENABLE_PIN,!X_on); //enables stepper if its not already enabled
+	if(X_dir == 0){ //this block sets the limit switch which will prevent movement if triggered
+			X_Stop = X_MIN_PIN ;
+		} else {
+			X_Stop = X_MAX_PIN ;
+		}
+
+	digitalWrite(Y_DIR_PIN, Y_dir); // set direction, LOW/0/false = Towards Home, HIGH/1/true = Away from home.
+	digitalWrite(Y_ENABLE_PIN,!Y_on); //enables stepper if its not already enabled
+	if(Y_dir == 0){ //this block sets the limit switch which will prevent movement if triggered
+			Y_Stop = Y_MIN_PIN ;
+		} else {
+			Y_Stop = Y_MAX_PIN ;
+		}
+
+	if ((digitalRead(X_Stop) + digitalRead(Y_Stop)) == 0) return false; //if all limit switches are triggered then return false
+
+
+	if (digitalRead(X_Stop) == 1) digitalWrite(X_STEP_PIN,HIGH); // if end stop open then send step
+	if (digitalRead(Y_Stop) == 1) digitalWrite(Y_STEP_PIN,HIGH); // if end stop open then send step
   delayMicroseconds(S_Speed);
-  digitalWrite(S_STEP_PIN,LOW);
+  digitalWrite(X_STEP_PIN,LOW);
+	digitalWrite(Y_STEP_PIN,LOW);
   delayMicroseconds(S_Speed); //max 300
-  return true;
+	return true;
 }
 
 
 
 
-void Move_Crane(char S_Motor, boolean S_Direct, int S_Speed, char S_Mode, byte S_Trigger = 0){
-  byte S_STEP_PIN;
-  byte S_DIR_PIN;
-  byte S_ENABLE_PIN;
-  byte S_LIMIT_PIN;
+bool Step_Z(bool Z_dir, int S_Speed){
+	int Z_Stop;
 
-  switch (S_Motor) {
-    case 'X': //Set up to move motor X
-        S_STEP_PIN = X_STEP_PIN;
-        S_DIR_PIN = X_DIR_PIN;
-        S_ENABLE_PIN = X_ENABLE_PIN;
-        if(S_Direct == 0){ //this block sets the limit switch to kill the command
-          S_LIMIT_PIN = X_MIN_PIN ;
-        } else {
-          S_LIMIT_PIN = X_MAX_PIN ;
-        }
-        if(X_Direction == 1){ //corrects stepper direction when required
-            S_Direct = !S_Direct;
-        }
-      break;
-    case 'Y': //Set up to move motor Y
-        S_STEP_PIN = Y_STEP_PIN;
-        S_DIR_PIN = Y_DIR_PIN;
-        S_ENABLE_PIN = Y_ENABLE_PIN;
-        if(S_Direct == 0){ //this block sets the limit switch to kill the command
-          S_LIMIT_PIN = Y_MIN_PIN ;
-        } else {
-          S_LIMIT_PIN = Y_MAX_PIN ;
-        }
-        if(Y_Direction == 1){//corrects stepper direction when required
-            S_Direct = !S_Direct;
-        }
-      break;
-    case 'Z': //Set up to move motor Y
-          S_STEP_PIN = Z_STEP_PIN;
-          S_DIR_PIN = Z_DIR_PIN;
-          S_ENABLE_PIN = Z_ENABLE_PIN;
-          if(S_Direct == 0){ //this block sets the limit switch to kill the command
-            S_LIMIT_PIN = Z_MIN_PIN ;
-          } else {
-            S_LIMIT_PIN = Z_MAX_PIN ;
-          }
-          if(Z_Direction == 1){//corrects stepper direction when required
-              S_Direct = !S_Direct;
-          }
-        break;
+	digitalWrite(Z_DIR_PIN, Z_dir); // set direction, LOW/0/false = Towards Home, HIGH/1/true = Away from home.
+	digitalWrite(Z_ENABLE_PIN,LOW); //enables stepper if its not already enabled
+	if(Z_dir == 0){ //this block sets the limit switch which will prevent movement if triggered
+			Z_Stop = Z_MIN_PIN ;
+		} else {
+			Z_Stop = Z_MAX_PIN ;
+		}
+
+	if (digitalRead(Z_Stop) == 0) return false; //if all limit switches are triggered then return false
+
+	if (digitalRead(Z_Stop) == 1) digitalWrite(Z_STEP_PIN,HIGH); // if end stop open then send step
+  delayMicroseconds(S_Speed);
+	digitalWrite(Z_STEP_PIN,LOW);
+  delayMicroseconds(S_Speed); //max 300
+
+	return true;
+}
+
+
+
+
+void Move_Single(char S_Axis, bool S_Dir, int S_Trigger, int S_Speed = XY_Speed){
+	int S_Stop;
+	bool X_On = false;
+	bool Y_On = false;
+
+  //Turns of X axis and sers appropriate end stop for the direction of travel
+	if (S_Axis == 'X'){
+		X_On = true;
+		if (S_Dir == 0){
+			S_Stop = X_MIN_PIN;
+		} else {
+			S_Stop = X_MAX_PIN;
+		}
+	}
+
+  //Turns of Y axis and sers appropriate end stop for the direction of travel
+  if (S_Axis == 'Y'){
+		Y_On = true;
+		if (S_Dir == 0){
+			S_Stop = Y_MIN_PIN;
+		} else {
+			S_Stop = Y_MAX_PIN;
+		}
+	}
+	while ((digitalRead(S_Trigger) == 0) && (digitalRead(S_Stop) == 1) && (G_Time_Out == false)){
+		if (Step_XY(X_On, S_Dir, Y_On, S_Dir, S_Speed) == false){
+      return;
     }
+	}
+
+	Stepers_Off();
+}
 
 
-
-    switch (S_Mode) {
-      case 'M':
-        while ((digitalRead(S_Trigger) == 1) && (G_Time_Out == false)){
-          if (MoveAxis(S_Direct, S_Speed, S_STEP_PIN, S_DIR_PIN, S_ENABLE_PIN, S_LIMIT_PIN) == false){
-            return;
-          }
-        }
-        break;
-      case 'H':
-        while (digitalRead(Y_MIN_PIN) == 1) {
-          if (MoveAxis(S_Direct, S_Speed, S_STEP_PIN, S_DIR_PIN, S_ENABLE_PIN, S_LIMIT_PIN) == false){
-            return;
-          }
-        }
-        break;
+void Lower_Z(){
+  int i;
+  long L_Steps;
+  L_Steps = (Steps_Per_mm * Crane_Drop_Distance) + 1;
+  lcd.setCursor(0,1);
+  lcd.print("Lower Z      ");
+  for (i = 1; i < L_Steps; ++i)
+  {
+		if (Step_Z(1, Z_Speed) == false){
+      lcd.setCursor(0,1);
+      lcd.print("Return False       ");
+      return;
+    }
   }
 }
 
+bool Home_Z(int S_Speed = Z_Home_Speed){
+
+	while (digitalRead(Z_MIN_PIN) == 1){
+		Step_Z(0, Z_Home_Speed);
+	}
+	return true;
+}
+
+
+bool Home_XY(bool X_On, bool Y_On, int S_Speed = XY_Home_Speed){
+  //this code might need ot be re-enabled to only home when the z is already home. Removed for testing ease
+	//while (((digitalRead(X_MIN_PIN) == 1) || (digitalRead(Y_MIN_PIN) == 1)) && (digitalRead(Z_MIN_PIN) == 0)){
+  while ((digitalRead(X_MIN_PIN) == 1) || (digitalRead(Y_MIN_PIN) == 1)){
+		Step_XY(X_On, 0, Y_On, 0, S_Speed);
+	}
+	Stepers_Off();
+
+	if (digitalRead(Z_MIN_PIN) == 1) return false;
+	return true;
+}
 
 
 
@@ -213,50 +269,90 @@ void Move_Crane(char S_Motor, boolean S_Direct, int S_Speed, char S_Mode, byte S
 
 void loop() {
 
+  lcd.setCursor(0,1);
+  lcd.print("Press Start           ");
 
-  // Wait for B_Pin to be pressed
+
+  // Wait for B_Pin to be pressed *Simulate Coin Entered
   while (digitalRead(G_PIN) == 1){
-    G_Start_Time = 10;
+    G_Remaining_Time = G_Start_Time;
+    G_Time_Out = false;
   }
 
   digitalWrite(LED_BUILTIN, HIGH);
   G_Timing = true;//start timer
 
+  lcd.setCursor(0,1);
+  lcd.print("Start          ");
+
+
+
+
+
+  lcd.setCursor(0,1);
+  lcd.print("Press forward         ");
   // Wait for B_Pin to be pressed
-  while (digitalRead(B_PIN) == 0){
+  while ((digitalRead(B_PIN) == 1) && (G_Time_Out == false)){
     delay(20);
   }
 
-  //Trigger timer and move untill B_Pin rerleased
-  if (digitalRead(B_PIN) == 1){
-    Move_Crane('X', 1, X_Speed,'M',B_PIN);
+  //move untill B_Pin rerleased
+  if ((digitalRead(B_PIN) == 0) && (G_Time_Out == false)){
+    Move_Single('X',1,B_PIN);
   }
 
-  while ((digitalRead(C_PIN) == 0) && (G_Time_Out == false)){
+
+
+
+  lcd.setCursor(0,1);
+  lcd.print("Press right       ");
+  // Wait for C_Pin to be pressed
+  while ((digitalRead(C_PIN) == 1) && (G_Time_Out == false)){
     delay(20);
   }
 
-  if (digitalRead(C_PIN) == 1){
-    Move_Crane('Z', 1, Default_Speed, 'M', C_PIN);
+  //move untill C_Pin rerleased
+  if ((digitalRead(C_PIN) == 0) && (G_Time_Out == false)){
+    Move_Single('Y',1,C_PIN);
+
+
   }
+
+
+
+  lcd.setCursor(0,1);
+  lcd.print("Press lower       ");
+  //wait for G_Pin to be pressed //probavly wouldnt need to wait for user when release but helps with dev
+  while ((digitalRead(G_PIN) == 1) && (G_Time_Out == false)){
+    delay(20);
+  }
+
+  if ((digitalRead(G_PIN) == 0)  && (G_Time_Out == false)){
+    Lower_Z();
+  }
+
 
   //END OF USE CONTROLLED SECTION
 
   G_Timing = false; //Stops the timer as user has finished input
+  G_Time_Out = false;
+  lcd.setCursor(13,0);
+  lcd.print("  ");
 
+
+  lcd.setCursor(0,1);
+  lcd.print("Returning home      ");
 
   delay(600);
-  Move_Crane('X', 0, X_Speed, 'H'); //Home Y
+  Home_Z();
   delay(500);
-  Move_Crane('Z', 0, X_Speed, 'H'); //Home Z
+  Home_XY(1,1);
+  delay(500);
+  //release claw
 
+  Serial.println("END!");
   digitalWrite(LED_BUILTIN, LOW);
   Stepers_Off();
 
-
-// Serial.print(digitalRead(Y_MIN_PIN));
-// Serial.print(digitalRead(Y_MAX_PIN));
-// Serial.print(digitalRead(Z_MIN_PIN));
-// Serial.println(digitalRead(Z_MAX_PIN));
 
 }
