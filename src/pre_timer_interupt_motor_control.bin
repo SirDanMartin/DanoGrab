@@ -102,7 +102,7 @@ void setup() {
    TCCR4B = 0;// same for TCCR1B
    TCNT4  = 0;//initialize counter value to 0
    // set compare match register for 1hz increments
-   OCR4A = 15624/XY_Speed;// = (16*10^6) / (1*1024) - 1 (must be <65536)
+   OCR4A = 15624/300;// = (16*10^6) / (1*1024) - 1 (must be <65536)
    // turn on CTC mode
    TCCR4B |= (1 << WGM12);
    // Set CS12 and CS10 bits for 1024 prescaler
@@ -115,7 +115,7 @@ void setup() {
    TCCR5B = 0;// same for TCCR1B
    TCNT5  = 0;//initialize counter value to 0
    // set compare match register for 1hz increments
-   OCR5A = 15624/Z_Speed;// = (16*10^6) / (1*1024) - 1 (must be <65536)
+   OCR5A = 15624/300;// = (16*10^6) / (1*1024) - 1 (must be <65536)
    // turn on CTC mode
    TCCR5B |= (1 << WGM12);
    // Set CS12 and CS10 bits for 1024 prescaler
@@ -157,15 +157,11 @@ ISR(TIMER2_COMPA_vect){
   }
 } //ISR TIMER END
 
-ISR(TIMER4_COMPA_vect){ //X Timer Interupt
-
-  //if limit swith open then send step signal low else
-
-  if (X_Drive == true){
+ISR(TIMER4_COMPA_vect){ //XY Timer Interupt
+  if (Z_Drive == true){
     XYSwitch = !XYSwitch;
     digitalWrite(Z_STEP_PIN,XYSwitch); // if end stop open then send step
   }
-
 }
 
 
