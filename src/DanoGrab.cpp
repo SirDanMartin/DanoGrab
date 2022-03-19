@@ -23,7 +23,6 @@ Machine parameters and Game Setting are in Config_Setup.h
 */
 
 
-
 void setup() {
   Serial.begin(115200);
 
@@ -55,6 +54,11 @@ void setup() {
   pinMode(F_BUTTON, INPUT_PULLUP);
   pinMode(R_BUTTON, INPUT_PULLUP);
   pinMode(S_BUTTON, INPUT_PULLUP);
+  pinMode(B_BUTTON, INPUT_PULLUP);
+
+  //Encoder Pin Setup
+  pinMode(BTN_ENC, INPUT_PULLUP);
+
 
   /** Re-Enable to aactivate cooling fan.
   pinMode(Main_Fan_Pin, OUTPUT);
@@ -187,12 +191,15 @@ boolean B_Wait(int W_Button, String B_Disp = ""){
   return true;
 }
 
-
+bool Correct_Dir(byte S_Axis, bool S_Dir){
+  if (Motor_Reverse[S_Axis] == 1) return !S_Dir;
+  return S_Dir;
+}
 
 
 void Home_XY(){
   for(int i = 0; i < 2; i++){ //for x and y
-    digitalWrite(DIR_PIN[i],0);     //Set direction to home
+    digitalWrite(DIR_PIN[i],Correct_Dir(i,0));     //Set direction to home
     digitalWrite(ENABLE_PIN[i],LOW);    //Enable motor
     Stepper_Drive[i] = true;            //Start Stepping
   }
@@ -210,12 +217,11 @@ void Home_XY(){
 
 
 
+
+
+
 void Move_Single(byte S_Axis, bool S_Dir, byte S_Hold){
-  if (Motor_Reverse[S_Axis] == 0) {
-    digitalWrite(DIR_PIN[S_Axis],S_Dir);   //Select Normal
-  } else {
-    digitalWrite(DIR_PIN[S_Axis],!S_Dir);   //Select Reverse
-  }
+  digitalWrite(DIR_PIN[S_Axis],Correct_Dir(S_Axis,S_Dir));   //Select Direction
   digitalWrite(ENABLE_PIN[S_Axis],LOW);   //Enable motor
   Stepper_Drive[S_Axis] = true;           //Start Stepping
   while ((digitalRead(S_Hold)==0) && (digitalRead(EStops[S_Axis][S_Dir])==1) && (G_Time_Out == false)){
@@ -227,19 +233,36 @@ void Move_Single(byte S_Axis, bool S_Dir, byte S_Hold){
 }
 
 
-void Move_Double(byte S_Axis, bool S_Dir, byte S_Hold){
-  if (Motor_Reverse[S_Axis] == 0) {
-    digitalWrite(DIR_PIN[S_Axis],S_Dir);   //Select Normal
-  } else {
-    digitalWrite(DIR_PIN[S_Axis],!S_Dir);   //Select Reverse
-  }
-  digitalWrite(ENABLE_PIN[S_Axis],LOW);   //Enable motor
-  Stepper_Drive[S_Axis] = true;           //Start Stepping
-  while ((digitalRead(S_Hold)==0) && (digitalRead(EStops[S_Axis][S_Dir])==1) && (G_Time_Out == false)){
-    // Loop untill button release or estop triggered or timer runs out
+void Move_XY_Free(){
+  digitalWrite(ENABLE_PIN[0],LOW);                     //Enable X motor
+  digitalWrite(ENABLE_PIN[1],LOW);                     //Enable Y motor
+  while ((G_Time_Out==0) && (digitalRead(BTN_ENC)==1)){
+    // Loop untill button time out or drop button pressed
+    if (digitalRead(F_BUTTON)==0){
+      digitalWrite(DIR_PIN[0],Correct_Dir(0,1));  //Select Direction
+      Stepper_Drive[0] = true;                    //Start Stepping
+    } else if (digitalRead(B_BUTTON)==0){
+      digitalWrite(DIR_PIN[0],Correct_Dir(0,0));  //Select Direction
+      Stepper_Drive[0] = true;                    //Start Stepping
+    } else {
+      Stepper_Drive[0] = false;              //Stop Stepping
+    }
+
+    if (digitalRead(R_BUTTON)==0){
+      digitalWrite(DIR_PIN[1],Correct_Dir(1,1));  //Select Direction
+      Stepper_Drive[1] = true;                    //Start Stepping
+    } else if (digitalRead(S_BUTTON)==0){
+      digitalWrite(DIR_PIN[1],Correct_Dir(1,0));  //Select Direction
+      Stepper_Drive[1] = true;                    //Start Stepping
+    } else {
+      Stepper_Drive[1] = false;              //Stop Stepping
+    }
     delay(5);
   }
-  Stepper_Drive[S_Axis] = false;        //Stop Stepping
+  digitalWrite(ENABLE_PIN[0],HIGH);                     //Enable X motor
+  digitalWrite(ENABLE_PIN[1],HIGH);                     //Enable Y motor
+  //Choosing not to dissengage steppers here as most cases there
+  //will be a crane and homing operaton after a free move.
 }
 
 /**
@@ -278,14 +301,16 @@ void loop() {
     Move_Single(1,1,R_BUTTON);
   }
 
+  LCD_Command("Free Move");
+  Move_XY_Free();
 
   // If time_out == true then play buzzer sound and show timout
   Timer(false); //Stops TImer
-  Stepers_Enable(false);
   digitalWrite(LED_BUILTIN, LOW);
   delay (200);
   LCD_Command("Returning");
   Home_XY();
+  Stepers_Enable(false);
 
 
   delay(200);

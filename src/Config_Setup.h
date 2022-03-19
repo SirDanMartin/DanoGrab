@@ -31,7 +31,7 @@
   -----------------
   */
 
-  int G_Start_Time = 15;
+  int G_Start_Time = 30;
   int Crane_Drop_Distance = 5; //Maximum distance to drop the crane. (Used if the limit switch does not trigger.)
 
   int G_Stop_Delay = 400;

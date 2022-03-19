@@ -47,11 +47,13 @@
   #define AUX2_B_PIN                               40
   #define AUX2_C_PIN                               42
   #define AUX2_G_PIN                               44
+  #define AUX2_F_PIN                               A10
 
   // User Buttons
   #define F_BUTTON                        AUX2_B_PIN
   #define R_BUTTON                        AUX2_C_PIN
   #define S_BUTTON                        AUX2_G_PIN
+  #define B_BUTTON                        AUX2_F_PIN
 
   //
   // AUX3 : GND D52 D50 5V

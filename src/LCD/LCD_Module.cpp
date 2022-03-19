@@ -6,6 +6,7 @@
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, /* clock=*/ LCD_PINS_D4, /* data=*/ LCD_PINS_ENABLE, /* CS=*/ LCD_PINS_RS);
 
+
 void LCD_IN_COIN(String vmessage, byte bar){
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_ncenB08_tr); // choose a suitable font
