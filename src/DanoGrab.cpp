@@ -1,5 +1,10 @@
+//External libraries
+#include <Arduino.h>
 #include <SPI.h>
-#include "LCD_Module.h"
+//Internal libraries
+#include "LCD\LCD_Module.h"
+#include "DanoGrab_Pins.h"
+#include "Config_Setup.h"
 
 
 /**
@@ -19,13 +24,12 @@ Machine parameters and Game Setting are in Config_Setup.h
 
 
 
-
 void setup() {
   Serial.begin(115200);
 
   //LED Setup
   u8g2.begin();
-  LCD_IN_COIN(" Enter Coins", 0);
+  LCD_IN_COIN("WELCOME", 0);
 
 
   //Stepper Pins Setup
@@ -112,8 +116,6 @@ void setup() {
   sei();//allow interrupts
 
 
-
-
 } // END SETUP
 
 
@@ -137,8 +139,6 @@ void Timer(boolean T_On){
   G_Timing = T_On;
   G_Time_Out = false;
 }
-
-
 
 void Stepers_Enable(bool S_State){
   for (int i = 0; i < 3; i++){
@@ -185,6 +185,27 @@ boolean B_Wait(int W_Button, String B_Disp = ""){
     delay(10);
   }
   return true;
+}
+
+
+
+
+void Home_XY(){
+  for(int i = 0; i < 2; i++){ //for x and y
+    digitalWrite(DIR_PIN[i],0);     //Set direction to home
+    digitalWrite(ENABLE_PIN[i],LOW);    //Enable motor
+    Stepper_Drive[i] = true;            //Start Stepping
+  }
+
+  while ((digitalRead(EStops[0][0])==1) || (digitalRead(EStops[1][0])==1)){
+    // Loop untill button release or estop triggered or timer runs out
+    delay(5);
+  }
+
+  for(int i = 0; i < 2; i++){ //for x and y
+    Stepper_Drive[i] = false;      //Stop Stepping
+    digitalWrite(ENABLE_PIN[i],HIGH);   //Disable motor
+  }
 }
 
 
@@ -241,7 +262,7 @@ while timer still going
 void loop() {
 
   //wait for coins to come in
-  LCD_IN_COIN("  Enter Coins", 0);
+  LCD_IN_COIN(" Enter Coins", 0);
   B_Wait(S_BUTTON);
   Timer(true); //Starts Timer
   digitalWrite(LED_BUILTIN, HIGH);
@@ -262,7 +283,9 @@ void loop() {
   Timer(false); //Stops TImer
   Stepers_Enable(false);
   digitalWrite(LED_BUILTIN, LOW);
-
+  delay (200);
+  LCD_Command("Returning");
+  Home_XY();
 
 
   delay(200);
