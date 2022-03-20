@@ -33,9 +33,7 @@
 
   int G_Start_Time = 30;
   int Crane_Drop_Distance = 5; //Maximum distance to drop the crane. (Used if the limit switch does not trigger.)
-
   int G_Stop_Delay = 400; //maximum delay when using random delay stop
-
 
 
   /**
@@ -43,20 +41,6 @@
   ||Program Variables||
   -----------------
   */
-
-  //creats arrays to store all motor info neatly
-  // 0 = x, 1 = y, 2 = z
-  byte static STEP_PIN[3] = {X_STEP_PIN, Y_STEP_PIN, Z_STEP_PIN};
-  byte static DIR_PIN[3] = {X_DIR_PIN, Y_DIR_PIN, Z_DIR_PIN};
-  byte static ENABLE_PIN[3] = {X_ENABLE_PIN, Y_ENABLE_PIN, Z_ENABLE_PIN};
-
-  byte static EStops[3][2] = {
-    {X_MIN_PIN, X_MAX_PIN},
-    {Y_MIN_PIN, Y_MAX_PIN},
-    {Z_MIN_PIN, Z_MAX_PIN}
-  };
-
-  bool static Motor_Reverse[3] = {X_Direction, Y_Direction, Z_Direction};
 
   //Game Phase Progression Vars
   bool G_Trip = false;
@@ -67,13 +51,10 @@
   int G_Remaining_Time;
 
   // Timer interupt motor vars
-  volatile bool XSwitch = false;
-  volatile bool YSwitch = false;
-  volatile bool ZSwitch = false;
+  bool XSwitch = false;
+  bool YSwitch = false;
+  bool ZSwitch = false;
   bool Stepper_Drive[3] = {false, false, false};
 
-  // int X_EStop;
-  // int Y_EStop;
-  // int Z_EStop;
 
   #endif
