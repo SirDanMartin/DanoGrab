@@ -20,5 +20,4 @@
     void StepEnable(bool enab);
     void Drive(bool denable);
   };
-
 #endif

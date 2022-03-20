@@ -32,7 +32,6 @@ Stepper StepperZ(Z_STEP_PIN, Z_DIR_PIN, Z_ENABLE_PIN, Z_MIN_PIN, Z_MAX_PIN, Z_Di
 
 
 
-
 void setup() {
   // Serial.begin(115200);
 
@@ -120,6 +119,7 @@ void setup() {
 } // END SETUP
 
 
+//Timer Interupt to count seconds
 ISR(TIMER1_COMPA_vect){
 //generates pulse wave of frequency 1Hz/2 = 0.5kHz (takes two cycles for full wave- toggle high then toggle low)
   sei(); //enbale nested interupts
@@ -143,7 +143,7 @@ void Timer(boolean T_On){
 
 
 
-ISR(TIMER3_COMPA_vect){ //X or 0 Timer Interupt
+ISR(TIMER3_COMPA_vect){ //X Timer Interupt
   if ((StepperX.StepDrive == true) && (digitalRead(StepperX.GetEStop()) == 1)){
     StepperX.Switch = !StepperX.Switch;
     digitalWrite(StepperX.Step_Pin, StepperX.Switch); // if end stop open then send step
@@ -151,14 +151,14 @@ ISR(TIMER3_COMPA_vect){ //X or 0 Timer Interupt
 }
 
 
-ISR(TIMER4_COMPA_vect){ //Y or 1 Timer Interupt
+ISR(TIMER4_COMPA_vect){ //Y Timer Interupt
   if ((StepperY.StepDrive == true) && (digitalRead(StepperY.GetEStop()) == 1)){
     StepperY.Switch = !StepperY.Switch;
     digitalWrite(StepperY.Step_Pin, StepperY.Switch); // if end stop open then send step
   }
 }
 
-ISR(TIMER5_COMPA_vect){ //Z or 3 Timer Interupt
+ISR(TIMER5_COMPA_vect){ //Z Timer Interupt
   if ((StepperZ.StepDrive == true) && (digitalRead(StepperZ.GetEStop()) == 1)){
     StepperZ.Switch = !StepperZ.Switch;
     digitalWrite(StepperZ.Step_Pin, StepperZ.Switch); // if end stop open then send step
