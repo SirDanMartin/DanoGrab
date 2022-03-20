@@ -22,9 +22,61 @@ Pins are all defines in Config_Pins.h
 Machine parameters and Game Setting are in Config_Setup.h
 */
 
+class Stepper {
+public:
+  //Set on decleration
+  byte Step_Pin, Dir_Pin, En_Pin;
+  byte EStopHome, EStopAway;
+  bool Reverse = false;
+  //Not set on decleration
+  bool Direction = 0;
+  bool StepDrive = 0;
+  bool Switch = 0;
+
+public:
+  Stepper(byte StepPin, byte DirPin, byte EnPin, bool EStopMin, bool EStopMax, bool ReverseMotor){
+    Step_Pin = StepPin;
+    Dir_Pin = DirPin;
+    En_Pin = EnPin;
+    EStopHome = EStopMin;
+    EStopAway = EStopMax;
+    Reverse = ReverseMotor;
+  }
+
+  void SetReverse(bool Rev){
+    Reverse = Rev;
+  }
+
+  void StepDir(bool newDir){
+    Direction = newDir;
+  }
+
+  byte GetEStop(){
+    if (Direction == 0) return EStopHome;
+    return EStopAway;
+  }
+
+  void StepEnable(bool enab){
+    digitalWrite(En_Pin,!enab);
+  }
+
+  void Drive(bool denable){
+    StepDrive = denable;
+  }
+
+};
+
+//sets up the stepper motors into classes
+Stepper StepperX(X_STEP_PIN, X_DIR_PIN, X_ENABLE_PIN, X_MIN_PIN, X_MAX_PIN, X_Direction);
+Stepper StepperY(Y_STEP_PIN, Y_DIR_PIN, Y_ENABLE_PIN, Y_MIN_PIN, Y_MAX_PIN, Y_Direction);
+Stepper StepperZ(Z_STEP_PIN, Z_DIR_PIN, Z_ENABLE_PIN, Z_MIN_PIN, Z_MAX_PIN, Z_Direction);
+
 
 void setup() {
   Serial.begin(115200);
+
+  Serial.print(StepperX.Step_Pin);
+
 
   //LED Setup
   u8g2.begin();
@@ -58,6 +110,7 @@ void setup() {
 
   //Encoder Pin Setup
   pinMode(BTN_ENC, INPUT_PULLUP);
+
 
 
   /** Re-Enable to aactivate cooling fan.
@@ -120,12 +173,13 @@ void setup() {
   sei();//allow interrupts
 
 
+  //StepperX.Enable(0);
+
 } // END SETUP
 
 
 ISR(TIMER1_COMPA_vect){
 //generates pulse wave of frequency 1Hz/2 = 0.5kHz (takes two cycles for full wave- toggle high then toggle low)
-  //Serial.println(millis()/1000); //Prints time left
   sei(); //enbale nested interupts
   if (G_Timing == true){ //if timer is active
     if (G_Remaining_Time < 0){ //if timer reached 0 then end timer and flag it
@@ -151,29 +205,33 @@ void Stepers_Enable(bool S_State){
 }
 
 
-ISR(TIMER3_COMPA_vect){ //X or 0 Timer Interupt
-  if ((Stepper_Drive[0] == true) && (digitalRead(EStops[0][digitalRead(DIR_PIN[0])])==1)){
-    XSwitch = !XSwitch;
-    digitalWrite(X_STEP_PIN,XSwitch); // if end stop open then send step
-    //Serial.print(X_Drive);
-  }
+// ISR(TIMER3_COMPA_vect){ //X or 0 Timer Interupt
+//   if ((Stepper_Drive[0] == true) && (digitalRead(EStops[0][digitalRead(DIR_PIN[0])])==1)){
+//     XSwitch = !XSwitch;
+//     digitalWrite(X_STEP_PIN,XSwitch); // if end stop open then send step
+//   }
+// }
 
+
+ISR(TIMER3_COMPA_vect){ //X or 0 Timer Interupt
+  if ((StepperX.StepDrive == true) && (digitalRead(StepperX.GetEStop()) == 1)){
+    StepperX.Switch = !StepperX.Switch;
+    digitalWrite(StepperX.Step_Pin, StepperX.Switch); // if end stop open then send step
+  }
 }
 
 
 ISR(TIMER4_COMPA_vect){ //Y or 1 Timer Interupt
-  if ((Stepper_Drive[1] == true) && (digitalRead(EStops[1][digitalRead(DIR_PIN[1])])==1)){
-    YSwitch = !YSwitch;
-    digitalWrite(Y_STEP_PIN,YSwitch); // if end stop open then send step
-    //Serial.print(X_Drive);
+  if ((StepperY.StepDrive == true) && (digitalRead(StepperY.GetEStop()) == 1)){
+    StepperY.Switch = !StepperY.Switch;
+    digitalWrite(StepperY.Step_Pin, StepperY.Switch); // if end stop open then send step
   }
 }
 
 ISR(TIMER5_COMPA_vect){ //Z or 3 Timer Interupt
-  if ((Stepper_Drive[2] == true) && (digitalRead(EStops[2][digitalRead(DIR_PIN[2])])==1)){
-    ZSwitch = !ZSwitch;
-    digitalWrite(Z_STEP_PIN,ZSwitch); // if end stop open then send step
-    Serial.print("Driven");
+  if ((StepperZ.StepDrive == true) && (digitalRead(StepperZ.GetEStop()) == 1)){
+    StepperZ.Switch = !StepperZ.Switch;
+    digitalWrite(StepperZ.Step_Pin, StepperZ.Switch); // if end stop open then send step
   }
 }
 
@@ -216,6 +274,20 @@ void Home_XY(){
 }
 
 
+
+
+
+void Move_Single_Class(Stepper &S_Stepper, bool S_Dir, byte S_Hold){
+  S_Stepper.StepDir(S_Dir);   //Select Direction
+  S_Stepper.StepEnable(1);   //Enable motor
+  S_Stepper.Drive(1);           //Start Stepping
+  while ((digitalRead(S_Hold)==0) && (digitalRead(S_Stepper.GetEStop())==1) && (G_Time_Out == false)){
+    // Loop untill button release or estop triggered or timer runs out
+    delay(5);
+  }
+  delay(random(0, G_Stop_Delay)); //delayed stop to make game unpredicatable
+  S_Stepper.StepEnable(0);         //Stop Stepping
+}
 
 
 
@@ -293,16 +365,20 @@ void loop() {
   Stepers_Enable(true);
   //wait for press forward and move forward
   if (B_Wait(F_BUTTON, " Press Forward") == true){
-    Move_Single(0,1,F_BUTTON);
+    //Move_Single(0,1,F_BUTTON);
+    Move_Single_Class(StepperX, 1, F_BUTTON);
   }
 
   //wair for press right and move right
   if (B_Wait(R_BUTTON, " Press Right") == true){
-    Move_Single(1,1,R_BUTTON);
+    // Move_Single(1,1,R_BUTTON);
+    Move_Single_Class(StepperX, 1, F_BUTTON);
   }
 
-  LCD_Command("Free Move");
-  Move_XY_Free();
+  //Free move lets you move left,right,forward,back as much
+  //as you like until time runs out or drop button pressed
+  // LCD_Command("Free Move");
+  // Move_XY_Free();
 
   // If time_out == true then play buzzer sound and show timout
   Timer(false); //Stops TImer
